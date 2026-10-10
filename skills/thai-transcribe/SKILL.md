@@ -16,7 +16,9 @@ description: ถอดเสียงพูดภาษาไทยเป็น�
 - ดาวน์โหลดโมเดลที่เลือกครั้งเดียว: `fast` 1.6 GB, `accurate` 1.5 GB
 
 สิ่งที่ต้องมี:
-- Python 3.9 ขึ้นไป บน Windows ใช้ `py -3` หรือ `python` ก็ได้
+- Python 3.9 ขึ้นไป
+  - Windows ใช้ `python` หรือ `py -3`
+  - macOS และ Linux ใช้ `python3`
 - พื้นที่ว่างราว 2–4 GB
 
 ก่อนรันครั้งแรก ให้ตรวจพื้นที่ว่างในไดรฟ์ของโฟลเดอร์ home
@@ -26,8 +28,17 @@ description: ถอดเสียงพูดภาษาไทยเป็น�
 ## วิธีรัน
 
 ```bash
+# Windows
 python "<skill-dir>/scripts/transcribe.py" "<ไฟล์เสียง>"
+# macOS: caffeinate -i กันเครื่องหลับระหว่างรัน (ถ้าเป็นโน้ตบุ๊ก ต้องเสียบสายชาร์จด้วย)
+caffeinate -i python3 "<skill-dir>/scripts/transcribe.py" "<ไฟล์เสียง>"
+# Linux
+python3 "<skill-dir>/scripts/transcribe.py" "<ไฟล์เสียง>"
 ```
+
+บน macOS:
+- รันบน CPU ได้ทั้ง Intel และ Apple Silicon (M1–M4) แต่ยังไม่รองรับ GPU ของ Mac
+- ถ้ายังไม่มี `python3` ให้ผู้ใช้รัน `xcode-select --install` หรือติดตั้งผ่าน Homebrew ด้วย `brew install python`
 
 ตัวเลือก:
 - `--model` เลือกโมเดล ตัวเลขด้านล่างวัดบน CPU Ryzen 5 4500U แบบไม่มี GPU:

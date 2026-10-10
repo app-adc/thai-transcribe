@@ -14,7 +14,7 @@
 /plugin install thai-transcribe@thai-transcribe
 ```
 
-ต้องมี Python 3.9 ขึ้นไปในเครื่อง ส่วนอย่างอื่นสกิลจะติดตั้งให้เองตอนใช้งานครั้งแรก:
+ใช้ได้ทั้ง Windows, macOS (Intel และ Apple Silicon) และ Linux ต้องมี Python 3.9 ขึ้นไปในเครื่อง บน Mac ถ้ายังไม่มี ให้รัน `xcode-select --install` หรือ `brew install python` ส่วนอย่างอื่นสกิลจะติดตั้งให้เองตอนใช้งานครั้งแรก:
 - venv และ faster-whisper
 - โมเดล ขนาดราว 1.6 GB
 
@@ -51,7 +51,7 @@
 ## เรียกใช้นอก Claude Code
 
 ```bash
-python skills/thai-transcribe/scripts/transcribe.py "ไฟล์เสียง.m4a" [--model accurate] [--suffix accurate]
+python3 skills/thai-transcribe/scripts/transcribe.py "ไฟล์เสียง.m4a" [--model accurate] [--suffix accurate]
 ```
 
 ## เครดิต

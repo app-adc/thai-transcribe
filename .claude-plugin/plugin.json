@@ -1,6 +1,6 @@
 {
   "name": "thai-transcribe",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "ถอดเสียงพูดภาษาไทยเป็นข้อความ (m4a, webm, mp3, wav, mp4) ไฟล์ยาวหลายชั่วโมง ทำงานในเครื่อง ใช้ Thonburian Whisper",
   "author": {
     "name": "pureuser"
