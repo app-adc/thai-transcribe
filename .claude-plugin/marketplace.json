@@ -2,7 +2,7 @@
   "name": "thai-transcribe",
   "description": "สกิลถอดเสียงภาษาไทยสำหรับ Claude Code",
   "owner": {
-    "name": "pureuser"
+    "name": "app-adc"
   },
   "plugins": [
     {

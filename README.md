@@ -10,7 +10,7 @@
 ใน Claude Code พิมพ์:
 
 ```
-/plugin marketplace add OWNER/REPO
+/plugin marketplace add app-adc/thai-transcribe
 /plugin install thai-transcribe@thai-transcribe
 ```
 
