@@ -2,7 +2,8 @@
 
 Usage:
     python keyframes.py <video> [--out-dir DIR] [--interval 1.0] [--change 0.02]
-                        [--still 0.003] [--scene 0.3] [--settle 6] [--overwrite]
+                        [--still 0.003] [--scene 0.3] [--settle 6] [--max-frames 60]
+                        [--overwrite]
 
 Output: <video name>.frames/ next to the video, containing
     0001_00-00-00.jpg, 0002_00-03-12.jpg, ...   (max 1280 px wide)
@@ -22,9 +23,14 @@ A candidate is only kept once no newer candidate follows within --settle
 seconds, so clicking through windows or editing a shared sheet yields the
 screen people stopped on, not every intermediate state. Moving the selected
 cell or the mouse changes ~0.7% of the thumbnail; a new slide changes 3%+.
+
+Live editing (a shared sheet being filled in) still changes the screen every
+few seconds, so at most --max-frames are kept: the least novel candidates are
+dropped first (see select()). A 2-hour editing session gave 342 candidates.
 """
 
 import argparse
+import io
 import json
 import re
 import sys
@@ -46,6 +52,25 @@ def to_image(frame):
     return img
 
 
+def select(candidates, budget, scene, changed):
+    """Trim to `budget` frames by repeatedly dropping the least novel one.
+
+    Novelty is the change from the previous kept frame, so a run of small edits
+    collapses into its first state while distinct screens survive. The first
+    frame and whole-scene switches (camera <-> screen share) are always kept.
+    """
+    keep = list(candidates)
+    if budget <= 0:
+        return keep
+    while len(keep) > budget:
+        droppable = [(changed(keep[j]["thumb"], keep[j - 1]["thumb"]), j)
+                     for j in range(1, len(keep)) if keep[j]["diff"] <= scene]
+        if not droppable:
+            break
+        del keep[min(droppable)[1]]
+    return keep
+
+
 def main():
     setup_console()
     p = argparse.ArgumentParser(description="ดึงภาพตอนหน้าจอเปลี่ยนจากวิดีโอ")
@@ -56,6 +81,7 @@ def main():
     p.add_argument("--still", type=float, default=0.003, help="changed-pixel fraction between samples below which the picture is still")
     p.add_argument("--scene", type=float, default=0.3, help="changed-pixel fraction that counts as a whole new scene")
     p.add_argument("--settle", type=float, default=6, help="a frame is kept only if the screen then stays put this many seconds")
+    p.add_argument("--max-frames", type=int, default=60, help="keep at most this many frames, dropping the least novel (0 = no limit)")
     p.add_argument("--overwrite", action="store_true", help="replace frames from an earlier run")
     args = p.parse_args()
     relaunch_in_venv(__file__, sys.argv[1:])
@@ -85,13 +111,13 @@ def main():
     print(f"วิดีโอ {src.name} · ยาว {fmt_duration(duration)} · {stream.width}x{stream.height}", flush=True)
 
     changed = lambda a, b: float((np.abs(a - b) > PIXEL_CHANGE).mean())
-    frames, reference, prev, pending = [], None, None, None
+    candidates, reference, prev, pending = [], None, None, None
     next_t, started, last_report = 0.0, time.time(), time.time()
 
     def commit(c):
-        name = f"{len(frames) + 1:04d}_{fmt_hms(c['time']).replace(':', '-')}.jpg"
-        c.pop("image").save(out_dir / name, "JPEG", quality=85)
-        frames.append({"time": round(c["time"], 2), "file": name, "diff": round(c["diff"], 3)})
+        buf = io.BytesIO()
+        c.pop("image").save(buf, "JPEG", quality=85)
+        candidates.append({**c, "jpeg": buf.getvalue()})
 
     for frame in container.decode(stream):
         t = frame.time
@@ -116,25 +142,33 @@ def main():
         if candidate:
             # A newer candidate within --settle replaces the pending one, but the
             # first frame of the video is always kept.
-            if pending and frames:
+            if pending and candidates:
                 diff = max(diff, pending["diff"])
             elif pending:
                 commit(pending)
-            pending = {"time": t, "image": to_image(frame), "diff": diff}
+            pending = {"time": t, "image": to_image(frame), "thumb": small, "diff": diff}
             reference = small
 
         if time.time() - last_report >= 30:
             last_report = time.time()
-            print(f"  {t / duration:.0%} [{fmt_hms(t)}/{fmt_hms(duration)}] · ได้ {len(frames)} ภาพ", flush=True)
+            print(f"  {t / duration:.0%} [{fmt_hms(t)}/{fmt_hms(duration)}] · เข้าเกณฑ์ {len(candidates)} ภาพ", flush=True)
 
     if pending:
         commit(pending)
     container.close()
+
+    kept = select(candidates, args.max_frames, args.scene, changed)
+    frames = []
+    for c in kept:
+        name = f"{len(frames) + 1:04d}_{fmt_hms(c['time']).replace(':', '-')}.jpg"
+        (out_dir / name).write_bytes(c["jpeg"])
+        frames.append({"time": round(c["time"], 2), "file": name, "diff": round(c["diff"], 3)})
     index_path.write_text(
         json.dumps({"video": src.name, "duration": round(duration, 2), "frames": frames}, ensure_ascii=False, indent=1),
         encoding="utf-8",
     )
-    print(f"เสร็จสิ้น · ได้ {len(frames)} ภาพ · ใช้เวลา {fmt_duration(time.time() - started)}", flush=True)
+    dropped = f" (คัดจาก {len(candidates)} ภาพที่เข้าเกณฑ์)" if len(kept) < len(candidates) else ""
+    print(f"เสร็จสิ้น · ได้ {len(frames)} ภาพ{dropped} · ใช้เวลา {fmt_duration(time.time() - started)}", flush=True)
     print(f"  {out_dir}", flush=True)
 
 
