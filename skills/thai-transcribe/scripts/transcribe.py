@@ -1,6 +1,6 @@
 """ถอดเสียงภาษาไทยเป็นข้อความ (รองรับไฟล์ยาวหลายชั่วโมง, ทำต่อจากจุดเดิมได้)
 
-Usage (any Python >= 3.9; the first run creates its own venv and installs faster-whisper):
+Usage (any Python >= 3.9; the first run creates its own venv, see _bootstrap.py):
     python transcribe.py <audio file> [--out-dir DIR] [--model fast|accurate|<hf-id>|<dir>]
                          [--suffix NAME] [--window 20] [--beam-size 5] [--threads N]
                          [--device cpu|cuda] [--restart] [--overwrite]
@@ -23,16 +23,13 @@ import argparse
 import json
 import os
 import re
-import subprocess
 import sys
 import time
 from pathlib import Path
 
+from _bootstrap import DATA_DIR, fmt_duration, fmt_hms, relaunch_in_venv, setup_console
+
 SAMPLE_RATE = 16000
-DATA_DIR = Path(os.environ.get("THAI_TRANSCRIBE_HOME") or Path.home() / ".thai-transcribe").expanduser()
-VENV_DIR = DATA_DIR / ".venv"
-VENV_PYTHON = VENV_DIR / ("Scripts/python.exe" if os.name == "nt" else "bin/python")
-REQUIREMENTS = ["faster-whisper>=1.1"]
 # Benchmarked on a Ryzen 5 4500U (CPU, int8), 20 s windows:
 #   fast     ~0.96x real time, CER ~2%  (mostly digits vs spelled-out numbers)
 #   accurate ~0.68x real time, CER ~0.4%
@@ -44,33 +41,6 @@ PARAGRAPH_GAP_SEC = 2.0
 PARAGRAPH_MAX_CHARS = 600
 MAX_SAME_IN_A_ROW = 3
 REWRITE_OUTPUT_EVERY = 10  # windows
-
-
-def in_venv():
-    return Path(sys.prefix).resolve() == VENV_DIR.resolve()
-
-
-def ensure_venv():
-    """Create DATA_DIR/.venv with faster-whisper on first use."""
-    if VENV_PYTHON.exists():
-        return
-    print(f"ติดตั้งครั้งแรก: สร้าง venv ที่ {VENV_DIR} และติดตั้ง faster-whisper…", flush=True)
-    DATA_DIR.mkdir(parents=True, exist_ok=True)
-    subprocess.check_call([sys.executable, "-m", "venv", str(VENV_DIR)])
-    subprocess.check_call([str(VENV_PYTHON), "-m", "pip", "install", "-q", "--upgrade", "pip"])
-    subprocess.check_call([str(VENV_PYTHON), "-m", "pip", "install", "-q", *REQUIREMENTS])
-    print("ติดตั้งเสร็จ", flush=True)
-
-
-def fmt_hms(seconds):
-    seconds = int(seconds)
-    return f"{seconds // 3600:02d}:{seconds % 3600 // 60:02d}:{seconds % 60:02d}"
-
-
-def fmt_duration(seconds):
-    seconds = int(seconds)
-    h, m = seconds // 3600, seconds % 3600 // 60
-    return f"{h} ชม. {m} นาที" if h else f"{m} นาที {seconds % 60} วินาที"
 
 
 def speech_windows(audio, window_sec):
@@ -156,8 +126,7 @@ def save_progress(path, data):
 
 
 def main():
-    sys.stdout.reconfigure(encoding="utf-8")
-    sys.stderr.reconfigure(encoding="utf-8")
+    setup_console()
     p = argparse.ArgumentParser(description="ถอดเสียงภาษาไทยเป็นข้อความ")
     p.add_argument("input", nargs="?")
     p.add_argument("--setup", action="store_true", help="install the venv and exit")
@@ -172,11 +141,7 @@ def main():
     p.add_argument("--overwrite", action="store_true", help="allow replacing existing transcripts")
     args = p.parse_args()
 
-    if not in_venv():
-        ensure_venv()
-        if args.setup:
-            return
-        sys.exit(subprocess.call([str(VENV_PYTHON), str(Path(__file__).resolve()), *sys.argv[1:]]))
+    relaunch_in_venv(__file__, sys.argv[1:], setup_only=args.setup)
     if args.setup:
         return
     if not args.input:
