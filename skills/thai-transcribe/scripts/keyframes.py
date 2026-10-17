@@ -52,23 +52,28 @@ def to_image(frame):
     return img
 
 
-def select(candidates, budget, scene, changed):
+def select(candidates, budget, np):
     """Trim to `budget` frames by repeatedly dropping the least novel one.
 
-    Novelty is the change from the previous kept frame, so a run of small edits
-    collapses into its first state while distinct screens survive. The first
-    frame and whole-scene switches (camera <-> screen share) are always kept.
+    A frame's novelty is its smallest change from any earlier kept frame, so a
+    run of small edits collapses into its first state and a screen the
+    presenter keeps switching back to (A -> B -> A) is kept once, even when
+    each switch is a whole-scene change. Only the first frame is never dropped.
     """
-    keep = list(candidates)
-    if budget <= 0:
-        return keep
-    while len(keep) > budget:
-        droppable = [(changed(keep[j]["thumb"], keep[j - 1]["thumb"]), j)
-                     for j in range(1, len(keep)) if keep[j]["diff"] <= scene]
-        if not droppable:
-            break
-        del keep[min(droppable)[1]]
-    return keep
+    n = len(candidates)
+    if budget <= 0 or n <= budget:
+        return candidates
+    thumbs = np.stack([c["thumb"] for c in candidates])
+    dist = np.full((n, n), np.inf)
+    for i in range(1, n):
+        dist[i, :i] = (np.abs(thumbs[:i] - thumbs[i]) > PIXEL_CHANGE).mean(axis=(1, 2))
+
+    keep = np.arange(n)
+    while len(keep) > max(budget, 1):
+        novelty = dist[np.ix_(keep, keep)].min(axis=1)
+        novelty[0] = np.inf  # first frame
+        keep = np.delete(keep, int(np.argmin(novelty)))
+    return [candidates[i] for i in keep]
 
 
 def main():
@@ -157,7 +162,7 @@ def main():
         commit(pending)
     container.close()
 
-    kept = select(candidates, args.max_frames, args.scene, changed)
+    kept = select(candidates, args.max_frames, np)
     frames = []
     for c in kept:
         name = f"{len(frames) + 1:04d}_{fmt_hms(c['time']).replace(':', '-')}.jpg"
